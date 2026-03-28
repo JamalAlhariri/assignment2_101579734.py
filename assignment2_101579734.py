@@ -36,9 +36,9 @@ class NetworkTool:
         self.__target = target
 
     # Q3: What is the benefit of using @property and @target.setter?
-    # Using @property and @target.setter lets the program control how the target value is accessed and changed.
-    # This is better than changing self.__target directly because validation can be added before assigning a new value.
-    # In this program, it helps prevent an empty target from being saved by mistake.
+    # Using @property lets us access the variable like an attribute but still control it.
+    # The setter makes sure invalid values like empty strings are not accepted.
+    # This helps prevent mistakes and keeps the program more stable.
     @property
     def target(self):
         return self.__target
@@ -55,9 +55,9 @@ class NetworkTool:
 
 
 # Q1: How does PortScanner reuse code from NetworkTool?
-# PortScanner reuses code from NetworkTool by inheriting from it.
-# For example, PortScanner uses the target property, setter, and constructor behavior from the parent class instead of rewriting them.
-# This makes the code shorter and keeps shared functionality in one place.
+# PortScanner reuses code by inheriting from NetworkTool.
+# It uses the target variable and methods like the constructor without rewriting them.
+# For example, the target property is already defined in the parent class.
 class PortScanner(NetworkTool):
     def __init__(self, target):
         super().__init__(target)
@@ -70,10 +70,11 @@ class PortScanner(NetworkTool):
 
     def scan_port(self, port):
         sock = None
+
         # Q4: What would happen without try-except here?
-        # Without try-except, a socket error on an unreachable machine could stop the whole program.
-        # That means one failed connection could crash the scan before the other ports are checked.
-        # Using try-except makes the scanner more reliable and allows it to continue scanning.
+        # If try-except was removed, any error while connecting to a port could crash the program.
+        # For example, if the target is unreachable, the scan would stop completely.
+        # This would make the scanner unreliable.
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(1)
@@ -101,9 +102,9 @@ class PortScanner(NetworkTool):
         return [result for result in self.scan_results if result[1] == "Open"]
 
     # Q2: Why do we use threading instead of scanning one port at a time?
-    # Threading makes the scan faster because multiple ports can be checked at the same time.
-    # If 1024 ports were scanned one by one, the program would take much longer to finish.
-    # Using threads improves performance and makes the scanner more practical.
+    # Threading allows multiple ports to be scanned at the same time.
+    # If we scanned 1024 ports one by one, it would take much longer to finish.
+    # Using threads improves speed and efficiency.
     def scan_range(self, start_port, end_port):
         threads = []
 
@@ -204,6 +205,7 @@ if __name__ == "__main__":
 
 
 # Q5: New Feature Proposal
-# One extra feature I would add is a filter option that shows only ports for a specific status or service name.
-# This could use a list comprehension to quickly build a smaller list from the scan results, such as only Open ports or only HTTP-related ports.
+# One feature I would add is the ability to filter results by service name.
+# This could use a list comprehension to return only ports matching something like "HTTP".
+# It would make it easier to focus on specific services instead of all scan results.
 # Diagram: See diagram_studentID.png in the repository root
