@@ -14,7 +14,7 @@ import datetime
 print("Python Version:", platform.python_version())
 print("Operating System:", os.name)
 
-# Stores common port numbers and their service names
+#  stores port numbers and service names
 common_ports = {
     21: "FTP",
     22: "SSH",
@@ -36,9 +36,11 @@ class NetworkTool:
         self.__target = target
 
     # Q3: What is the benefit of using @property and @target.setter?
-    # Using @property lets us access the variable like an attribute but still control it.
-    # The setter makes sure invalid values like empty strings are not accepted.
-    # This helps prevent mistakes and keeps the program more stable.
+    # It lets the program control how the target is used and changed.
+    # This is better than changing the variable directly because it can check for bad values first.
+    # In this case it stops the target from being set to an empty string.
+
+    
     @property
     def target(self):
         return self.__target
@@ -49,44 +51,45 @@ class NetworkTool:
             self.__target = value
         else:
             print("Error: Target cannot be empty")
-
     def __del__(self):
         print("NetworkTool instance destroyed")
 
 
 # Q1: How does PortScanner reuse code from NetworkTool?
 # PortScanner reuses code by inheriting from NetworkTool.
-# It uses the target variable and methods like the constructor without rewriting them.
-# For example, the target property is already defined in the parent class.
+# It gets the target variable and the getter and setter from the parent class.
+# For example, PortScanner can use self.target without making that code again.
+
+
+
 class PortScanner(NetworkTool):
     def __init__(self, target):
         super().__init__(target)
         self.scan_results = []
         self.lock = threading.Lock()
-
     def __del__(self):
         print("PortScanner instance destroyed")
         super().__del__()
-
     def scan_port(self, port):
         sock = None
 
+
         # Q4: What would happen without try-except here?
-        # If try-except was removed, any error while connecting to a port could crash the program.
-        # For example, if the target is unreachable, the scan would stop completely.
-        # This would make the scanner unreliable.
+        # Without try-except, a socket error could stop the whole program.
+        # If the machine could not be reached, the scan might crash before finishing the rest of the ports.
+        # This makes the program safer and allows it to keep going.
+
+
+
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(1)
             result = sock.connect_ex((self.target, port))
-
             if result == 0:
                 status = "Open"
             else:
                 status = "Closed"
-
             service_name = common_ports.get(port, "Unknown")
-
             self.lock.acquire()
             self.scan_results.append((port, status, service_name))
             self.lock.release()
@@ -97,26 +100,28 @@ class PortScanner(NetworkTool):
         finally:
             if sock:
                 sock.close()
-
     def get_open_ports(self):
-        return [result for result in self.scan_results if result[1] == "Open"]
+        return [item for item in self.scan_results if item[1] == "Open"]
+
+
 
     # Q2: Why do we use threading instead of scanning one port at a time?
-    # Threading allows multiple ports to be scanned at the same time.
-    # If we scanned 1024 ports one by one, it would take much longer to finish.
-    # Using threads improves speed and efficiency.
+    # Threading helps scan many ports faster because more than one port can be checked at once.
+    # If 1024 ports were scanned one by one, it would take a lot longer.
+    # Using threads makes the scanner more efficient.
+
+
+
     def scan_range(self, start_port, end_port):
         threads = []
-
         for port in range(start_port, end_port + 1):
-            t = threading.Thread(target=self.scan_port, args=(port,))
-            threads.append(t)
+            thread = threading.Thread(target=self.scan_port, args=(port,))
+            threads.append(thread)
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
 
-        for t in threads:
-            t.start()
-
-        for t in threads:
-            t.join()
 
 
 def save_results(target, results):
@@ -125,27 +130,31 @@ def save_results(target, results):
         cursor = conn.cursor()
 
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS scans (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                target TEXT,
-                port INTEGER,
-                status TEXT,
-                service TEXT,
-                scan_date TEXT
-            )
+        CREATE TABLE IF NOT EXISTS scans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            target TEXT,
+            port INTEGER,
+            status TEXT,
+            service TEXT,
+            scan_date TEXT
+        )
         """)
 
-        for port, status, service in results:
+        for result in results:
+            port = result[0]
+            status = result[1]
+            service = result[2]
+
             cursor.execute("""
-                INSERT INTO scans (target, port, status, service, scan_date)
-                VALUES (?, ?, ?, ?, ?)
+            INSERT INTO scans (target, port, status, service, scan_date)
+            VALUES (?, ?, ?, ?, ?)
             """, (target, port, status, service, str(datetime.datetime.now())))
 
         conn.commit()
         conn.close()
 
-    except sqlite3.Error as e:
-        print(f"Database error: {e}")
+    except sqlite3.Error:
+        print("Database error")
 
 
 def load_past_scans():
@@ -158,54 +167,54 @@ def load_past_scans():
 
         for row in rows:
             print(f"[{row[5]}] {row[1]} : Port {row[2]} ({row[4]}) - {row[3]}")
-
         conn.close()
-
     except sqlite3.Error:
         print("No past scans found.")
 
 
-# ============================================================
-# MAIN PROGRAM
-# ============================================================
+
+
 if __name__ == "__main__":
     try:
-        target = input("Enter target IP (default 127.0.0.1): ").strip()
+        target = input("Enter target IP (default 127.0.0.1): ")
         if target == "":
             target = "127.0.0.1"
 
-        start_port = int(input("Enter start port (1-1024): "))
-        end_port = int(input("Enter end port (1-1024): "))
+        start_port = int(input("Enter start port: "))
+        end_port = int(input("Enter end port: "))
 
-        if start_port < 1 or start_port > 1024 or end_port < 1 or end_port > 1024:
+        if start_port < 1 or end_port > 1024:
             print("Port must be between 1 and 1024.")
         elif end_port < start_port:
             print("Port must be between 1 and 1024.")
         else:
             scanner = PortScanner(target)
-            print(f"Scanning {target} from port {start_port} to {end_port}...")
+
+            print("Scanning...")
 
             scanner.scan_range(start_port, end_port)
+
             open_ports = scanner.get_open_ports()
 
-            print(f"--- Scan Results for {target} ---")
-            for port, status, service in open_ports:
-                print(f"Port {port}: {status} ({service})")
-            print("------")
-            print(f"Total open ports found: {len(open_ports)}")
+            for p in open_ports:
+                print(p)
+
+            print("Total open ports:", len(open_ports))
 
             save_results(target, scanner.scan_results)
 
-            choice = input("Would you like to see past scan history? (yes/no): ").strip().lower()
-            if choice == "yes":
+            choice = input("See past scans? ")
+            if choice.lower() == "yes":
                 load_past_scans()
 
-    except ValueError:
-        print("Invalid input. Please enter a valid integer.")
+    except:
+        print("Invalid input.")
+
+
 
 
 # Q5: New Feature Proposal
-# One feature I would add is the ability to filter results by service name.
-# This could use a list comprehension to return only ports matching something like "HTTP".
-# It would make it easier to focus on specific services instead of all scan results.
-# Diagram: See diagram_studentID.png in the repository root
+# One feature I would want to add is to group the ports by their services.
+# This could be done by only using open ports and grouping them based on the service name from the common_ports dictionary with a list comprehension.
+# It would make it easier to understand what kinds of services are running on the target instead of just seeing individual ports.
+# Diagram: See diagram_101579734.png in the repository root
